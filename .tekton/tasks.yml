@@ -49,3 +49,47 @@ spec:
         python -m pip install --upgrade pip wheel
         pip install -r requirements.txt
         nosetests $(params.args)
+
+# New flake8-linting task
+
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: flake8-linting
+spec:
+  workspaces:
+    - name: source
+  steps:
+    - name: lint
+      image: python:3.9-slim
+      workingDir: $(workspaces.source.path)
+      script: |
+        #!/bin/bash
+        set -e
+        pip install flake8
+        flake8 service --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 service --count --max-complexity=10 --max-line-length=127 --statistics
+---
+# New deploy task
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: deploy
+spec:
+  workspaces:
+    - name: source
+  params:
+    - name: app-name
+      description: Name of the application
+      type: string
+      default: "my-app"
+    - name: build-image
+      description: Image to deploy
+      type: string
+  steps:
+    - name: deploy-app
+      image: quay.io/openshift/origin-cli:latest
+      script: |
+        #!/bin/bash
+        set -e
+        oc create deployment $(params.app-name) --image=$(params.build-image) --dry-run=client -o yaml | oc apply -f -
